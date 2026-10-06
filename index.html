@@ -75,7 +75,7 @@ table.data tr.past td{opacity:.55}
 .log>div:first-child{border-top:0}
 .pos{font:800 22px/1 var(--f-display)}
 .name-input{background:transparent;border:0;border-bottom:1px dashed var(--line);color:var(--ink);font:800 30px/1 var(--f-display);text-transform:uppercase;width:100%;padding:0 0 4px}
-#toast{position:fixed;left:50%;bottom:calc(20px + env(safe-area-inset-bottom,0px));transform:translateX(-50%);background:var(--panel-2);border:1px solid var(--buoy);padding:10px 16px;border-radius:6px;z-index:60;max-width:calc(100% - 32px)}
+#toast{pointer-events:none;position:fixed;left:50%;bottom:calc(20px + env(safe-area-inset-bottom,0px));transform:translateX(-50%);background:var(--panel-2);border:1px solid var(--buoy);padding:10px 16px;border-radius:6px;z-index:60;max-width:calc(100% - 32px)}
 
 /* ---------- world ---------- */
 #world{min-height:100%;padding-inline:16px;padding-block:14px 30px;box-sizing:border-box;
@@ -785,7 +785,7 @@ const lenTxt=c=>c.len[1]>150?c.len[0]+'+ ft':c.len[0]?c.len[0]+'–'+c.len[1]+' 
 const eligibleLen=(d,e)=>d.len>=e.C.len[0]&&d.len<=e.C.len[1];
 
 /* ================= state ================= */
-const KEY='offshore-skipper-v3',GAME_VERSION='Version 31 · 6 Oct 2026';
+const KEY='offshore-skipper-v3',GAME_VERSION='Version 31.1 · 6 Oct 2026';
 /* each signed-in account keeps its own careers on this device (ACC is set by cloud.js / auth.js) */
 const IDXK=()=>typeof ACC!=='undefined'&&ACC?'os-'+ACC+'-slots':'offshore-skipper-slots',SLOT=id=>(typeof ACC!=='undefined'&&ACC?'os-'+ACC+'-slot-':'offshore-skipper-slot-')+id;
 let S=null,uid=Date.now(),SLOTS={cur:null,list:[]};
@@ -1613,7 +1613,7 @@ function loopBody(now){
  }
  if(RS&&RS.phase==='race'){draw(dt);hud();
   if(RS.pingDue){RS.pingDue=false;const bt=$('#bTrack');bt.classList.remove('ping');void bt.offsetWidth;bt.classList.add('ping')}
-  if(RS.trkOpen&&RS.tkDirty&&now-(RS.tkT||0)>(tkSize==='n'?250:450)){RS.tkDirty=false;RS.tkT=now;renderTracker()}
+  if(RS.trkOpen&&RS.tkDirty&&!uiHold&&now-(RS.tkT||0)>(tkSize==='n'?250:450)){RS.tkDirty=false;RS.tkT=now;renderTracker()}
   if(RS.cardPause&&$('#teamM').hidden){RS.cardPause=false;RS.paused=false;syncBtns()}}
 }
 function sailRep(h){const b=RS.player;if(b.sailRep){b.sailRep.left-=h;if(b.sailRep.left<=0){b.torn=b.torn.filter(s=>s!==b.sailRep.sail);RS.alert=b.sailRep.sail+' repaired';RS.alertT=2;RS.alertGood=true;b.sailRep=null}}}
@@ -1763,7 +1763,7 @@ function hud(){
  if(RS.alertT>0)al.textContent=RS.alert;else if(p.over){al.style.color='var(--crit)';al.textContent=((performance.now()/500|0)%2)?'Overpowered: reef now (R)':''}else al.textContent='';
  $('#hFail').textContent=(p.fail&&!p.fail.fixed?FAILS[p.fail.type].name+(p.fail.repair!=null?` · repairing (${fmtHrs(p.fail.repair)})`:''):'')+(p.sailRep?` · ${p.sailRep.sail} repair ${fmtHrs(p.sailRep.left)}`:'');
  syncBtns();if(RS.trkOpen&&hudN%30===0){const t=$('#tkTime');t.textContent=t.textContent.replace(/next in [^·]+·/,'next in '+nextIn()+' ·')}
- if(!$('#sailPanel').hidden&&hudN%15===0)renderSails();if(RS.cardI!=null&&hudN%12===0&&!$('#boatCard').matches(':hover'))renderBoatCard();
+ if(!$('#sailPanel').hidden&&hudN%15===0&&!uiHold)renderSails();if(RS.cardI!=null&&hudN%12===0&&!$('#boatCard').matches(':hover'))renderBoatCard();
 }
 const nextIn=()=>{const h=Math.max(0,RS.nextPoll-RS.h);return h<1?Math.ceil(h*60)+' min':h.toFixed(1)+' h'};
 function syncBtns(){if(RS&&$('#bPause')){$('#bPause').textContent=RS.paused?'Resume':'Pause';$('#bPause').classList.toggle('on',!!RS.paused)}if(!RS||!RS.player)return;const p=RS.player;$('#bCam').textContent=RS.autoCam?'Auto camera: on':'Auto camera: off';$('#bCam').classList.toggle('on',!!RS.autoCam);$('#pRetire').textContent=RS.spectate?'Skip to the result':'Retire from race';$('#pResume').textContent=RS.spectate?'Resume coverage':'Resume racing';
@@ -1773,9 +1773,15 @@ function syncBtns(){if(RS&&$('#bPause')){$('#bPause').textContent=RS.paused?'Res
  $('#bWatch').textContent=WATCH_NAMES[p.watch];$('#bSails').classList.toggle('on',!$('#sailPanel').hidden)}
 
 /* ---------- sails panel ---------- */
-function renderSails(){const p=RS.player;
- $('#sailList').innerHTML=p.d.sails.map((s,i)=>{const e=sailEff(s,p.twa,p.w.s)/(BESTP(p.twa,p.w.s)||1),S0=SAILS[s],torn=p.torn.includes(s),ex=p.w.s-S0.tws[1];const cls=torn?'crit':ex>0?'warn':e>.95?'good':e>.8?'':'dim';
-  return`<button class="sailbtn ${cls} ${p.sail===s?'cur':''}" data-s="${s}" ${torn?'disabled':''}><b>${i<9?(i+1)+' · ':''}${s}</b><span class="bar"><i style="width:${Math.round(e*100)}%"></i></span><small>${S0.twa[0]}–${S0.twa[1]}° · ${S0.tws[0]}–${S0.tws[1]} kn${torn?' · torn':''}</small></button>`}).join('');
+/* panels that refresh while racing must not swap out a button between press and release, or the click is lost */
+let uiHold=0;
+addEventListener('pointerdown',e=>{if(e.target.closest&&e.target.closest('#tracker,#sailPanel,#boatCard,.warpmenu'))uiHold=1},true);
+for(const ev of['pointerup','pointercancel'])addEventListener(ev,()=>{if(uiHold)setTimeout(()=>{uiHold=0;if(RS&&RS.trkOpen)RS.tkDirty=true},60)},true);
+function renderSails(){const p=RS.player;const L=$('#sailList');
+ const sig=p.d.name+'|'+p.d.sails.join(',');if(L.dataset.sig===sig&&L.children.length===p.d.sails.length){p.d.sails.forEach((s,i)=>{const b=L.children[i];const e=sailEff(s,p.twa,p.w.s)/(BESTP(p.twa,p.w.s)||1),S0=SAILS[s],torn=p.torn.includes(s),ex=p.w.s-S0.tws[1];const cls=torn?'crit':ex>0?'warn':e>.95?'good':e>.8?'':'dim';
+   b.className=`sailbtn ${cls} ${p.sail===s?'cur':''}`;b.disabled=torn;const bar=b.querySelector('.bar i');if(bar)bar.style.width=Math.round(e*100)+'%';const sm=b.querySelector('small');const st=`${S0.twa[0]}–${S0.twa[1]}° · ${S0.tws[0]}–${S0.tws[1]} kn${torn?' · torn':''}`;if(sm&&sm.textContent!==st)sm.textContent=st});}
+ else{L.dataset.sig=sig;L.innerHTML=p.d.sails.map((s,i)=>{const e=sailEff(s,p.twa,p.w.s)/(BESTP(p.twa,p.w.s)||1),S0=SAILS[s],torn=p.torn.includes(s),ex=p.w.s-S0.tws[1];const cls=torn?'crit':ex>0?'warn':e>.95?'good':e>.8?'':'dim';
+  return`<button class="sailbtn ${cls} ${p.sail===s?'cur':''}" data-s="${s}" ${torn?'disabled':''}><b>${i<9?(i+1)+' · ':''}${s}</b><span class="bar"><i style="width:${Math.round(e*100)}%"></i></span><small>${S0.twa[0]}–${S0.twa[1]}° · ${S0.tws[0]}–${S0.tws[1]} kn${torn?' · torn':''}</small></button>`}).join('')}
  $('#sailAuto').hidden=!(p.crew.trim>0&&p.crew.bow>0);$('#sailAuto').classList.toggle('on',!!S.autoSail);$('#sailAuto').textContent=S.autoSail?'Crew choose sails: on':'Crew choose sails: off'}
 $('#sailList').addEventListener('click',e=>{const b=e.target.closest('button');if(!b||!RS)return;S.autoSail=false;startSail(RS.player,b.dataset.s);renderSails()});
 $('#sailAuto').onclick=()=>{S.autoSail=!S.autoSail;save();renderSails()};
@@ -1848,7 +1854,7 @@ function tkLabel(x,bt,o,L){const lx=o.px+L*.8+4,ly=o.py+1;const two=!!o.sub;
   x.fillStyle='rgba(7,19,25,.78)';x.fillRect(rc[0],rc[1],rc[2]-rc[0],rc[3]-rc[1]);
   x.font=o.strong?'700 11.5px Barlow, sans-serif':'600 10.5px Barlow, sans-serif';x.fillStyle=bt.isP?'#f2c230':o.strong?'#ffffff':'rgba(236,242,244,.92)';x.fillText(o.label,lx,ly);
   if(two){x.font='500 8.5px "JetBrains Mono", monospace';x.fillStyle=bt.isP?'rgba(242,194,48,.7)':'rgba(200,214,219,.62)';x.fillText(o.sub,lx,ly+10)}}
-function renderTracker(){const pi=RS.polls.length-1;const m=RS.tkMode||'line';$('#tkModes').innerHTML=tkModeBtns();$('#tkHead').innerHTML=TK_HEAD[m==='line'?'line':'hc'](true);
+function renderTracker(){const pi=RS.polls.length-1;const m=RS.tkMode||'line';{const mb=tkModeBtns();if($('#tkModes').dataset.h!==mb){$('#tkModes').dataset.h=mb;$('#tkModes').innerHTML=mb}}$('#tkHead').innerHTML=TK_HEAD[m==='line'?'line':'hc'](true);
  if(pi<0){$('#tkTime').textContent='First position report at the start';$('#tkBody').innerHTML='';$('#tkSum').textContent='';return}const P=RS.polls[pi];
  const L=boardAt(pi,'line'),me=L.find(r=>r.b.isP);const C=boardAt(pi,'cls').find(r=>r.b.isP);
  $('#tkSum').innerHTML=me?`You: <b>${me.lr?ord(me.lr):'—'}</b> on the water · <b>${me.hr_?ord(me.hr_):'—'}</b> on handicap · <b>${C?.cr?ord(C.cr):'—'}</b> in ${RS.player.cls[0]} class`:'';
